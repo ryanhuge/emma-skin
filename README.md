@@ -56,7 +56,12 @@ they are there so the first run costs nothing.
 ```bash
 git clone <REPO_URL> emma-skin
 cd emma-skin
-node examples/hermes/serve.js          # add HERMES_URL / HERMES_KEY as needed
+
+# smallest thing that works — one key pays for the words and the voice
+OPENAI_API_KEY=sk-... node examples/openai/serve.js
+
+# or point at any OpenAI-compatible endpoint you already run
+AGENT_URL=http://127.0.0.1:11434 AGENT_MODEL=llama3 node examples/agent/serve.js
 ```
 
 It checks the agent before it starts listening, so a wrong URL or a missing key fails
@@ -108,10 +113,24 @@ over the built-in one. Neither account is bundled; see [NOTICE](NOTICE).
 
 ### Verified on
 
-A clean `git clone` on macOS 26.5 (Apple Silicon, Node 22) against Hermes 0.20, following
-only the steps above: agent reachable, `say` voice, loudness fallback, two spoken sentences,
-mouth moving, returning to the idle clip. Linux is exercised in development but has not been
-through the same clean-room run.
+Each row is a fresh `git clone` following only the steps above — no shared state between
+them, and deliberately different combinations rather than the same one twice.
+
+| OS | agent | voice | mouth | result |
+|---|---|---|---|---|
+| macOS 26.5, Node 22 | Hermes 0.20 (local) | `say` | loudness fallback | ✅ 2 sentences, mouth moving, returns to idle |
+| Linux, Node 22 | Groq (`gpt-oss-20b`) | espeak-ng | ONNX model | ✅ 2 sentences, 59 + 69 mouth frames |
+| Linux, Node 22 | DeepSeek via an OpenAI-compatible gateway | espeak-ng | ONNX model | ✅ 2 sentences, 68 + 194 frames |
+| any | OpenAI (`examples/openai/`) | OpenAI TTS | — | ⚠️ **auth only** |
+
+The last row is honest about what was not done: the test key had no credits, so
+`api.openai.com` returned 429 before either the chat or the speech call did any work. The
+chat path is the same `OpenAICompatibleHost` the two verified rows exercise, but
+`OpenAITTS` — the `/v1/audio/speech` call — has never actually run. If you use that example
+and it breaks, that is why.
+
+A reasoning model works incidentally: DeepSeek interleaves `reasoning_content` in the same
+stream, and since only `delta.content` is read, the thinking is not spoken aloud.
 
 ## Architecture
 
