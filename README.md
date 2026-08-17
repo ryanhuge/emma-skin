@@ -56,21 +56,49 @@ they are there so the first run costs nothing.
 ```bash
 git clone <REPO_URL> emma-skin
 cd emma-skin
+```
 
-# smallest thing that works — one key pays for the words and the voice
+Then pick whichever describes you. All three serve the same face at the same address.
+
+**A. One API key, nothing local.** The smallest thing that works — the key pays for both the
+words and the voice.
+
+```bash
 OPENAI_API_KEY=sk-... node examples/openai/serve.js
+```
 
-# or point at any OpenAI-compatible endpoint you already run
+Set `OPENAI_BASE_URL` to use a compatible provider instead (Groq, Together, OpenRouter).
+
+**B. An agent you already run.** Anything that serves `/v1/chat/completions` with
+`stream: true` — Ollama, LM Studio, vLLM, LiteLLM, your own.
+
+```bash
 AGENT_URL=http://127.0.0.1:11434 AGENT_MODEL=llama3 node examples/agent/serve.js
 ```
+
+The voice comes from the OS here: macOS already has `say`; on Linux run
+`apt install espeak-ng`. Set `OPENAI_API_KEY` or `FISH_AUDIO_API_KEY` for a better one.
+
+**C. Hermes.** Same as B, plus one thing the generic adapter cannot know: Hermes announces
+its tool calls on the same stream, so the face looks like it is working *because it is*,
+rather than on a timer.
+
+```bash
+export HERMES_KEY=$(grep '^API_SERVER_KEY=' ~/.hermes/.env | cut -d= -f2-)
+HERMES_URL=http://127.0.0.1:8642 node examples/hermes/serve.js
+```
+
+Hermes needs its key even from localhost, and keeps it in `~/.hermes/.env`. On a Mac that is
+the whole install: Node is already there if Hermes runs, and `say` supplies the voice, so
+nothing is downloaded and no account is needed.
 
 It checks the agent before it starts listening, so a wrong URL or a missing key fails
 immediately and says which:
 
 ```
 Cannot use the agent: agent rejected the API key (401)
-Set HERMES_URL to your agent, and HERMES_KEY if it needs one.
-Hermes keeps its key in ~/.hermes/.env as API_SERVER_KEY.
+Set AGENT_URL to an OpenAI-compatible endpoint, AGENT_KEY if it needs one,
+and AGENT_MODEL to a model it serves (see GET /v1/models).
 ```
 
 A good start looks like this:
@@ -78,8 +106,8 @@ A good start looks like this:
 ```
 [emma-skin] viseme service not reachable — falling back to the loudness envelope…
 EMMA Skin → http://127.0.0.1:8730
-  agent  http://127.0.0.1:8642 (hermes-agent)
-  voice  SayTTS
+  agent  https://api.openai.com (gpt-4o-mini)
+  voice  OpenAI nova
   mouth  EnergyViseme
 ```
 
@@ -97,7 +125,7 @@ converse('introduce yourself in one sentence')
 
 The server listens on loopback only: it holds your agent's API key and authenticates
 nobody. To reach it from a phone, bind it to a private address explicitly —
-`HOST=100.x.y.z node examples/hermes/serve.js` — and understand that anything which can
+`HOST=192.168.1.20 node examples/agent/serve.js` — and understand that anything which can
 reach that address can talk to your agent.
 
 **Even less than that:** no agent, no server, no keys — a recorded clip and its
