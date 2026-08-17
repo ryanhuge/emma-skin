@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<!-- Installable on purpose. Safari does not keep a microphone grant across page loads in a
+     normal tab, so a browser tab re-prompts every time iOS discards and reloads it; a
+     home-screen web app keeps the grant with the app. Verified on iPhone. -->
+<link rel="manifest" href="/examples/agent/manifest.json">
+<link rel="icon" href="/examples/agent/icon.png">
+<title>Agent</title>
+<link rel="stylesheet" href="/packages/runtime/src/emma-skin.css">
+<style>
+  html, body { height: 100%; margin: 0; background: #14110E; color: #F2EDE4;
+    font: 15px/1.7 -apple-system, "Noto Sans TC", system-ui, sans-serif;
+    user-select: none; -webkit-user-select: none; }
+  #stage { position: fixed; inset: 0; }
+  #scrim { position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(to bottom, rgba(20,17,14,.5) 0%, transparent 22%,
+      transparent 46%, rgba(20,17,14,.86) 88%, rgba(20,17,14,.96) 100%); }
+  #status { position: absolute; top: 0; left: 0; padding: 16px 18px;
+    font-size: 12px; letter-spacing: .08em; color: #A79B8A; }
+  #caption { position: absolute; left: 0; right: 0; bottom: 132px; padding: 0 22px;
+    max-height: 30vh; overflow-y: auto; text-align: center;
+    text-shadow: 0 1px 12px rgba(0,0,0,.85); }
+  #caption .you { display: block; color: #A79B8A; font-size: 13px; margin-bottom: 6px; }
+  #bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 20px;
+    display: flex; justify-content: center; }
+  /* touch-action stops the browser claiming the hold as a scroll gesture, which would
+     swallow the pointerup and leave recording stuck on. */
+  #mic { width: 76px; height: 76px; border-radius: 50%; border: 2px solid #C9A96E;
+    background: #3A211C; cursor: pointer; touch-action: none; font-size: 26px; color: #F2EDE4; }
+  #mic.on { background: #E4443A; transform: scale(1.07); }
+  #mic:disabled { opacity: .4; }
+</style>
+</head>
+<body>
+<div id="stage" class="emma-stage">
+  <video id="clip" class="emma-clip" muted playsinline autoplay loop preload="auto"></video>
+  <canvas id="face" class="emma-face"></canvas>
+  <div id="scrim"></div>
+  <div id="status">connecting…</div>
+  <div id="caption"></div>
+  <div id="bar"><button id="mic" disabled>🎙</button></div>
+</div>
+
+<script type="module">
+import { EmmaSkin } from '/packages/runtime/src/emma-skin.js';
+
+const statusEl = document.getElementById('status');
+const capEl = document.getElementById('caption');
+const micBtn = document.getElementById('mic');
+const setStatus = (s) => { statusEl.textContent = s; };
+
+const face = new EmmaSkin({
+  canvas: document.getElementById('face'),
+  video: document.getElementById('clip'),
+  art: '/assets/emma/',
+});
+await face.load();
+window.face = face;
+
+/**
+ * Speech recognition runs in the browser on purpose: it needs no key, no model download and
+ * no server-side audio handling, which is what makes the first run of this example free.
+ * Note that it is not local — Chrome and Safari both send audio to their vendor. Swap in a
+ * server-side transcriber if that matters.
+ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (!SR) {
+  setStatus('this browser has no speech recognition — try Safari or Chrome');
+} else {
+  micBtn.disabled = false;
+  setStatus('hold to talk');
+}
+
+let recog = null;
+let history = [];
+
+const startListening = () => {
+  if (recog) return;
+  recog = new SR();
+  recog.lang = navigator.language || 'zh-TW';
+  recog.interimResults = true;
+  recog.continuous = false;
+
+  let finalText = '';
+  recog.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) finalText += r[0].transcript;
+      else interim += r[0].transcript;
+    }
+    capEl.innerHTML = `<span class="you">${escapeHtml(finalText + interim)}</span>`;
+  };
+  recog.onerror = (e) => setStatus(`mic: ${e.error}`);
+  recog.onend = () => {
+    recog = null;
+    micBtn.classList.remove('on');
+    if (finalText.trim()) converse(finalText.trim());
+    else setStatus('hold to talk');
+  };
+
+  recog.start();
+  micBtn.classList.add('on');
+  face.setState('listening');
+  setStatus('listening');
+};
+
+const stopListening = () => { recog?.stop(); };
+
+micBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); face.resume(); startListening(); });
+micBtn.addEventListener('pointerup', (e) => { e.preventDefault(); stopListening(); });
+micBtn.addEventListener('pointercancel', stopListening);
+
+async function converse(text) {
+  face.setState('thinking');
+  setStatus('thinking');
+  micBtn.disabled = true;
+  capEl.innerHTML = `<span class="you">${escapeHtml(text)}</span>`;
+  let reply = '';
+
+  try {
+    const res = await fetch('/api/converse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, history }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+
+    for await (const { event, data } of sse(res)) {
+      if (event === 'state' && data.state) {
+        setStatus(data.detail ? `${data.state} · ${data.detail}` : data.state);
+      } else if (event === 'sentence') {
+        reply += data.text;
+        capEl.innerHTML = `<span class="you">${escapeHtml(text)}</span>${escapeHtml(reply)}`;
+        capEl.scrollTop = capEl.scrollHeight;
+        setStatus('speaking');
+        face.speak({
+          pcm: data.audio.pcm,
+          sampleRate: data.audio.sampleRate,
+          visemes: data.visemes,
+          fps: data.fps,
+        });
+      } else if (event === 'error') {
+        setStatus(`error: ${data.message}`);
+      }
+    }
+
+    if (reply) history = [...history, { role: 'user', content: text },
+      { role: 'assistant', content: reply }].slice(-12);
+  } catch (err) {
+    setStatus(`error: ${err.message}`);
+    face.setState('idle');
+  } finally {
+    micBtn.disabled = false;
+    face.onSpeechEnd = () => setStatus('hold to talk');
+    if (!reply) setStatus('hold to talk');
+  }
+}
+
+/** Minimal SSE reader: yields {event, data} per complete message. */
+async function* sse(res) {
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const block = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      let event = 'message', data = '';
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event:')) event = line.slice(6).trim();
+        else if (line.startsWith('data:')) data += line.slice(5).trim();
+      }
+      if (!data) continue;
+      try { yield { event, data: JSON.parse(data) }; } catch { /* skip malformed */ }
+    }
+  }
+}
+
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+// Exposed so a turn can be driven without a microphone — useful for testing, and for
+// trying the face on a machine whose browser has no speech recognition.
+window.converse = converse;
+</script>
+</body>
+</html>

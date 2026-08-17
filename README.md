@@ -113,6 +113,46 @@ only the steps above: agent reachable, `say` voice, loudness fallback, two spoke
 mouth moving, returning to the idle clip. Linux is exercised in development but has not been
 through the same clean-room run.
 
+## Architecture
+
+Three processes. The browser draws, the sidecar orchestrates, the viseme service does one
+numerical job and can live on another machine or not exist at all.
+
+```
+  browser                     sidecar (node)                  your stuff
+  ─────────────────────────   ─────────────────────────────   ──────────────────
+  speech recognition
+    │ text
+    └──── POST /api/converse ──▶ AgentHost.chat() ──────────────▶ agent (streaming)
+                                      │ text deltas   ◀──────────
+                                 SentenceSplitter
+                                      │ one sentence at a time
+                                 TTS.synthesize() ──────────────▶ voice (say / API)
+                                      │ PCM          ◀──────────
+                                 viseme.extract() ──────────────▶ viseme service
+                                      │ mouth curve  ◀──────────    (or fallback)
+    ◀──── SSE: sentence ──────────────┘
+    │
+  EmmaSkin.speak({pcm, visemes})
+    ├─ schedules the audio on the AudioContext timeline
+    └─ samples the curve against that same clock, 60fps
+```
+
+**The clock is the whole design.** The mouth curve is computed from the exact samples that
+will be played, and both are scheduled on one AudioContext timeline — so lips and audio
+cannot drift, whatever the network does between them. Every constraint in the interface
+follows from this, including the one about `synthesize` returning PCM.
+
+**Sentences, not replies.** The splitter emits as soon as a clause closes, and the first one
+is allowed to break early on a comma. Synthesis for sentence *n+1* runs while *n* is still
+playing, so only the first sentence costs latency. They are emitted strictly in order,
+because concurrent synthesis finishing out of order would otherwise have her say the second
+half of the answer first — that ordering is the sidecar's main job besides holding the key.
+
+**Failure is partial.** No viseme service means a loudness envelope instead of a curve. A
+failed extraction means that one sentence plays with a resting mouth. A dead agent is caught
+at startup. Nothing here takes the face down with it.
+
 ## How it works
 
 Two layers, and which is on screen depends only on whether she is speaking.
