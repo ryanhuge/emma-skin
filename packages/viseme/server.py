@@ -57,12 +57,11 @@ SESSION = ort.InferenceSession(_model_path, _so, providers=["CPUExecutionProvide
 # The model outputs conservative magnitudes (jawOpen peaks around 0.12 on speech that
 # should read as a wide-open mouth), and each axis has a different resting floor — a
 # flat gain either pins the mouth open or never lets it close. These are (p5, p99)
-# measured over 25.9s / 778 frames of Emma's current Fish Audio voice
-# using phrase sets that exercise open vowels,
-# bilabials and rounded vowels.
+# measured over 25.9s / 778 frames of one Mandarin voice, using phrase sets that exercise
+# open vowels, bilabials and rounded vowels.
 #
-# RE-MEASURE THESE WHEN VOICE_TTS_REFERENCE_ID CHANGES. Voices differ enough to matter:
-# the previous voice (沛緹) peaked at 0.669 openness against this one's 0.583, so reusing
+# RE-MEASURE THESE WHEN YOU CHANGE VOICE. Voices differ enough to matter: another voice
+# from the same provider peaked at 0.669 openness against this one's 0.583, and reusing
 # its constants leaves the mouth ~13% under-opened throughout.
 CALIBRATION = {
     "openness": (0.0414, 0.5830),

@@ -15,8 +15,8 @@
  */
 
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { extname, join, normalize, resolve } from 'node:path';
+import { lstat, readFile } from 'node:fs/promises';
+import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { SentenceSplitter } from './sentences.js';
 import { autoViseme } from './viseme.js';
@@ -143,15 +143,33 @@ async function converse({ req, res, host, synth, viseme }) {
   }
 }
 
+/**
+ * Dotfiles are never served.
+ *
+ * The examples hand this the repository root so the runtime and the face pack resolve by
+ * path, which also means `/.git/config`, `/.git/HEAD` and the rest of the object store are
+ * a plain GET away — the full source and history, including whatever remote it was cloned
+ * from. Harmless on loopback, an unattended file server the moment anyone sets HOST to
+ * reach the face from a phone.
+ */
+const HIDDEN = /(^|[/\\])\./;
+
 async function serveStatic(req, res, roots) {
   const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const rel = normalize(urlPath === '/' ? '/index.html' : urlPath).replace(/^(\.\.[/\\])+/, '');
+  if (HIDDEN.test(rel)) return void res.writeHead(404).end('not found');
+
   for (const root of roots) {
     const file = join(root, rel);
-    // normalize() alone does not stop a path escaping the root once symlinks are involved.
-    if (!resolve(file).startsWith(root)) continue;
+    // Compare against root + separator: a bare startsWith would also accept a sibling
+    // directory whose name merely begins with the root's, and resolve() does not follow
+    // symlinks, so a link inside the tree could still point out of it.
+    const abs = resolve(file);
+    if (abs !== root && !abs.startsWith(root + sep)) continue;
     try {
-      const buf = await readFile(file);
+      const stat = await lstat(abs);
+      if (stat.isSymbolicLink() || !stat.isFile()) continue;
+      const buf = await readFile(abs);
       res.writeHead(200, { 'Content-Type': MIME[extname(file)] || 'application/octet-stream' });
       return res.end(buf);
     } catch { /* try the next root */ }
