@@ -190,7 +190,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    # Loopback by default: this service does no authentication, so it should not be on a
+    # public interface. Set VISEME_HOST to a private address (a tailnet IP, say) when a
+    # second machine needs to borrow it — a laptop can use one running on a desktop rather
+    # than downloading the model twice.
+    HOST = os.environ.get("VISEME_HOST", "127.0.0.1")
     # Warm the graph so the first real request isn't paying allocation costs.
     SESSION.run(None, {"audio_waveform": np.zeros((1, TARGET_SR), dtype=np.float32)})
-    print(f"[viseme] ready on :{PORT} (model={_model_path}, threads={THREADS})", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    print(f"[viseme] ready on {HOST}:{PORT} (model={_model_path}, threads={THREADS})", flush=True)
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { createEmmaSkinServer } from '../../packages/server/src/server.js';
+import { OnnxViseme } from '../../packages/server/src/viseme.js';
 import { HermesHost } from '../../packages/server/src/host.js';
 import { SayTTS, EspeakTTS, FishAudioTTS, OpenAITTS } from '../../packages/server/src/tts.js';
 
@@ -56,12 +57,18 @@ if (!tts) {
   process.exit(1);
 }
 
+// The viseme service does not have to be on this machine — it is a small HTTP call, and a
+// laptop can borrow one running elsewhere on the network. Unset, the sidecar looks for a
+// local one and falls back to the loudness envelope if there is none.
 const port = Number(process.env.PORT || 8730);
 const { viseme } = await createEmmaSkinServer({
   host,
   tts,
   port,
   staticDirs: [here, repo],
+  ...(process.env.VISEME_URL
+    ? { viseme: new OnnxViseme({ url: process.env.VISEME_URL }) }
+    : {}),
 });
 
 console.log(`EMMA Skin → http://127.0.0.1:${port}`);

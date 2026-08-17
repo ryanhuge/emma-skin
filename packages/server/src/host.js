@@ -34,18 +34,22 @@ export class AgentHost {
     throw new Error('AgentHost.chat() must be implemented');
   }
 
-  /**
-   * Turn one sentence into audio. Optional — falls back to the configured TTS.
-   * @param {string} sentence
-   * @returns {Promise<Utterance>}
+  /*
+   * Two more methods are part of this interface, and are deliberately NOT declared here:
+   *
+   *   synthesize(sentence) -> Promise<Utterance>
+   *       Turn one sentence into audio. Omit to use the configured TTS.
+   *
+   *   onActivity(cb)
+   *       Register a callback for {state, detail} as the agent works, so the face can look
+   *       busy because it is. Omit if the agent has nothing to report.
+   *
+   * Declaring them as class fields (`synthesize = undefined`) is the obvious way to
+   * document an optional method and it silently breaks every subclass: class fields are
+   * assigned on the instance at construction, which shadows the prototype method a subclass
+   * defined. `host.onActivity?.()` then reads undefined and does nothing — no error, the
+   * feature simply never fires. Callers must feature-detect, which is what `?.` is for.
    */
-  synthesize = undefined;
-
-  /**
-   * Report what the agent is doing, so the face can react. Optional.
-   * @param {(activity: {state: 'thinking'|'idle', detail?: string}) => void} cb
-   */
-  onActivity = undefined;
 }
 
 /**
