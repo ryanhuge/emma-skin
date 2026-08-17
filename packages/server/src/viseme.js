@@ -79,10 +79,17 @@ export class EnergyViseme {
     }
 
     // A jaw has mass; an unsmoothed envelope chatters at every consonant.
-    const smoothed = openness.map((v, i, a) => {
+    let smoothed = openness.map((v, i, a) => {
       const lo = Math.max(0, i - 1), hi = Math.min(a.length - 1, i + 1);
       return (a[lo] + v + a[hi]) / 3;
     });
+
+    // Stretch this utterance onto the full range. A fixed dB floor leaves a normal speaking
+    // level sitting around a third of the scale, and the renderer then scales it down again
+    // — the mouth barely moved (measured peak 0.27 against 0.55 from the model). The ONNX
+    // path is calibrated against a reference recording; this is the same idea per utterance.
+    const peak = Math.max(...smoothed);
+    if (peak > 0.05) smoothed = smoothed.map((v) => Math.min(1, v / peak));
 
     return {
       fps: this.fps,
