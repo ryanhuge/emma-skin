@@ -34,9 +34,10 @@ const MIME = {
  * @param {object}   [opts.viseme]     defaults to the model if running, envelope if not
  * @param {string[]} [opts.staticDirs] directories to serve, first match wins
  * @param {number}   [opts.port=8730]
+ * @param {string}   [opts.hostname='127.0.0.1']  bind address
  */
 export async function createEmmaSkinServer(opts) {
-  const { host, tts, staticDirs = [], port = 8730 } = opts;
+  const { host, tts, staticDirs = [], port = 8730, hostname = '127.0.0.1' } = opts;
   if (!host) throw new Error('createEmmaSkinServer needs a host');
   const speak = opts.tts ?? null;
   const synth = host.synthesize?.bind(host) ?? speak?.synthesize?.bind(speak);
@@ -60,8 +61,12 @@ export async function createEmmaSkinServer(opts) {
     }
   });
 
-  await new Promise((r) => server.listen(port, r));
-  return { server, port, viseme };
+  // Loopback unless asked otherwise. This sidecar proxies your agent and holds its API key,
+  // and it authenticates nobody — listening on every interface by default would put the
+  // agent on whatever network the machine happens to join. Pass hostname explicitly (a
+  // tailnet address, say) when another device genuinely needs to reach it.
+  await new Promise((r) => server.listen(port, hostname, r));
+  return { server, port, hostname, viseme };
 }
 
 async function converse({ req, res, host, synth, viseme }) {

@@ -70,18 +70,22 @@ if (!reach.ok) {
   process.exit(1);
 }
 
+// HOST is opt-in: the default keeps this on loopback, because the sidecar carries the
+// agent's key and checks nobody. Set it to a private address to use the face from a phone.
 const port = Number(process.env.PORT || 8730);
+const hostname = process.env.HOST || '127.0.0.1';
 const { viseme } = await createEmmaSkinServer({
   host,
   tts,
   port,
+  hostname,
   staticDirs: [here, repo],
   ...(process.env.VISEME_URL
     ? { viseme: new OnnxViseme({ url: process.env.VISEME_URL }) }
     : {}),
 });
 
-console.log(`EMMA Skin → http://127.0.0.1:${port}`);
+console.log(`EMMA Skin → http://${hostname}:${port}`);
 console.log(`  agent  ${reach.detail}`);
 console.log(`  voice  ${tts.constructor.name}`);
 console.log(`  mouth  ${viseme.constructor.name}`);
