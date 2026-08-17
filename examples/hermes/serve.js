@@ -60,6 +60,16 @@ if (!tts) {
 // The viseme service does not have to be on this machine — it is a small HTTP call, and a
 // laptop can borrow one running elsewhere on the network. Unset, the sidecar looks for a
 // local one and falls back to the loudness envelope if there is none.
+// Fail here rather than three steps later, mid-conversation, where a missing key looks
+// like a broken face.
+const reach = await host.check();
+if (!reach.ok) {
+  console.error(`Cannot use the agent: ${reach.detail}`);
+  console.error('Set HERMES_URL to your agent, and HERMES_KEY if it needs one.');
+  console.error('Hermes keeps its key in ~/.hermes/.env as API_SERVER_KEY.');
+  process.exit(1);
+}
+
 const port = Number(process.env.PORT || 8730);
 const { viseme } = await createEmmaSkinServer({
   host,
@@ -72,6 +82,6 @@ const { viseme } = await createEmmaSkinServer({
 });
 
 console.log(`EMMA Skin → http://127.0.0.1:${port}`);
-console.log(`  agent  ${host.baseUrl}`);
+console.log(`  agent  ${reach.detail}`);
 console.log(`  voice  ${tts.constructor.name}`);
 console.log(`  mouth  ${viseme.constructor.name}`);

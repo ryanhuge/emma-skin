@@ -73,6 +73,31 @@ export class OpenAICompatibleHost extends AgentHost {
     this.systemPrompt = systemPrompt;
   }
 
+  /**
+   * Check the agent answers before anyone tries to talk to it.
+   *
+   * Without this the first failure surfaces mid-conversation, as an error event after the
+   * face has already gone to thinking — which reads as "the face is broken" when the real
+   * answer is a missing API key. Startup is the honest place to find out.
+   *
+   * @returns {Promise<{ok: boolean, detail: string}>}
+   */
+  async check() {
+    try {
+      const res = await fetch(`${this.baseUrl}/v1/models`, {
+        headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {},
+        signal: AbortSignal.timeout(5000),
+      });
+      if (res.status === 401 || res.status === 403) {
+        return { ok: false, detail: `agent rejected the API key (${res.status})` };
+      }
+      if (!res.ok) return { ok: false, detail: `agent returned ${res.status}` };
+      return { ok: true, detail: `${this.baseUrl} (${this.model})` };
+    } catch (err) {
+      return { ok: false, detail: `cannot reach ${this.baseUrl}: ${err.message}` };
+    }
+  }
+
   async *chat(userText, { signal, history = [] } = {}) {
     const messages = [
       ...(this.systemPrompt ? [{ role: 'system', content: this.systemPrompt }] : []),
