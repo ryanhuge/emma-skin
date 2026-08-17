@@ -88,8 +88,16 @@ export class OpenAICompatibleHost extends AgentHost {
         headers: this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {},
         signal: AbortSignal.timeout(5000),
       });
+      // Auth is worth failing on: a rejected key will reject every turn too.
       if (res.status === 401 || res.status === 403) {
         return { ok: false, detail: `agent rejected the API key (${res.status})` };
+      }
+      // /v1/models is optional in practice — plenty of servers implement only the chat
+      // endpoint. Refusing to start on a 404 rejects agents that work perfectly well, which
+      // is precisely the kind of check that makes software feel broken to everyone whose
+      // setup differs from the author's.
+      if (res.status === 404) {
+        return { ok: true, detail: `${this.baseUrl} (${this.model}, /v1/models not offered)` };
       }
       if (!res.ok) return { ok: false, detail: `agent returned ${res.status}` };
       return { ok: true, detail: `${this.baseUrl} (${this.model})` };
