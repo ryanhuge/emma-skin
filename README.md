@@ -43,24 +43,75 @@ Lips and audio have to share a single clock or they drift, and the only way to g
 that is to compute the mouth curve from the very samples that will be played. A TTS that
 can only play audio itself cannot be lip-synced by anything, including this.
 
-## Try it
+## Install
 
-**No agent, no server, no keys** — a recorded clip and its pre-computed mouth curve:
+There is no build step and nothing to `npm install` — the runtime has no dependencies and
+the server uses only Node built-ins. The face is in the repository; you do not generate
+anything.
+
+**You need:** Node 18+, an agent with an OpenAI-compatible streaming endpoint, and a voice.
+macOS already has one (`say`); on Linux, `apt install espeak-ng`. Both sound synthetic —
+they are there so the first run costs nothing.
+
+```bash
+git clone <REPO_URL> emma-skin
+cd emma-skin
+node examples/hermes/serve.js          # add HERMES_URL / HERMES_KEY as needed
+```
+
+It checks the agent before it starts listening, so a wrong URL or a missing key fails
+immediately and says which:
+
+```
+Cannot use the agent: agent rejected the API key (401)
+Set HERMES_URL to your agent, and HERMES_KEY if it needs one.
+Hermes keeps its key in ~/.hermes/.env as API_SERVER_KEY.
+```
+
+A good start looks like this:
+
+```
+[emma-skin] viseme service not reachable — falling back to the loudness envelope…
+EMMA Skin → http://127.0.0.1:8730
+  agent  http://127.0.0.1:8642 (hermes-agent)
+  voice  SayTTS
+  mouth  EnergyViseme
+```
+
+That warning is expected on a first run: the mouth model is a separate 400MB download, so
+until you install it the mouth follows loudness instead. It moves, and it is obviously not
+real lip sync. See [packages/viseme/README.md](packages/viseme/README.md) to upgrade — the
+service can also run on another machine (`VISEME_URL`), so a laptop can borrow a desktop's.
+
+Then open **http://127.0.0.1:8730** and hold the microphone button. No microphone, or a
+browser without speech recognition? Drive a turn from the console instead:
+
+```js
+converse('introduce yourself in one sentence')
+```
+
+The server listens on loopback only: it holds your agent's API key and authenticates
+nobody. To reach it from a phone, bind it to a private address explicitly —
+`HOST=100.x.y.z node examples/hermes/serve.js` — and understand that anything which can
+reach that address can talk to your agent.
+
+**Even less than that:** no agent, no server, no keys — a recorded clip and its
+pre-computed mouth curve, to see the renderer on its own.
 
 ```bash
 python3 -m http.server 8899
 open http://127.0.0.1:8899/examples/static/
 ```
 
-**With a real agent** (Hermes here; any OpenAI-compatible endpoint works):
+**A better voice:** set `FISH_AUDIO_API_KEY` or `OPENAI_API_KEY` and it will be preferred
+over the built-in one. Neither account is bundled; see [NOTICE](NOTICE).
 
-```bash
-HERMES_URL=http://127.0.0.1:8642 node examples/hermes/serve.js
-```
+### Verified on
 
-On macOS this needs no API key — the built-in `say` voice is used. On Linux, install
-`espeak-ng`. Both sound synthetic; they exist so the first run is free. Set
-`FISH_AUDIO_API_KEY` or `OPENAI_API_KEY` for a real voice.
+A clean `git clone` on macOS 26.5 (Apple Silicon, Node 22) against Hermes 0.20, following
+only the steps above: agent reachable, `say` voice, loudness fallback, two spoken sentences,
+mouth moving, returning to the idle clip. Linux is exercised in development but has not been
+through the same clean-room run.
 
 ## How it works
 
