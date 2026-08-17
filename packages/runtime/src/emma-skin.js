@@ -51,15 +51,17 @@ const XFADE_HOLD_MS = 260;
 export class EmmaSkin {
   /**
    * @param {object}            opts
-   * @param {HTMLCanvasElement} opts.canvas  drawn while speaking
-   * @param {HTMLVideoElement}  opts.video   looped while quiet; may be omitted
-   * @param {string}            opts.art     face pack directory, e.g. '/assets/emma/'
-   * @param {object}           [opts.clips]  state -> clip id, e.g. {listening: 'thinking'}
+   * @param {HTMLCanvasElement} opts.canvas    drawn while speaking
+   * @param {HTMLVideoElement}  opts.video     looped while quiet; may be omitted
+   * @param {string}            opts.art       face pack directory, e.g. '/assets/emma/'
+   * @param {object}           [opts.clips]    state -> clip id, e.g. {listening: 'thinking'}
+   * @param {string}           [opts.clipDir]  where clips live, relative to art
    */
-  constructor({ canvas, video = null, art = '/assets/emma/', clips = null }) {
+  constructor({ canvas, video = null, art = '/assets/emma/', clips = null, clipDir = 'clips/' }) {
     this.canvas = canvas;
     this.video = video;
     this.art = art.replace(/\/?$/, '/');
+    this.clipDir = clipDir.replace(/\/?$/, '/');
 
     // Which clip plays in which state. `listening` pointing at the thinking take is the
     // face pack's business, not the runtime's — a pack may not ship a listening clip.
@@ -148,7 +150,7 @@ export class EmmaSkin {
     const id = this.clipFor[state] || this.clipFor.idle;
     if (id === this._clipId && this.video.src) return;
     this._clipId = id;
-    if (!this.video.src.endsWith(`${id}.mp4`)) this.video.src = `${this.art}clips/${id}.mp4`;
+    if (!this.video.src.endsWith(`${id}.mp4`)) this.video.src = `${this.art}${this.clipDir}${id}.mp4`;
     this.video.play().catch(() => {});
   }
 
