@@ -1,0 +1,14 @@
+{
+  "name": "emma-skin",
+  "version": "0.1.0",
+  "description": "A talking face for any agent — photoreal lip-sync driven by audio, not phonemes.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "demo": "python3 -m http.server 8899",
+    "hermes": "node examples/hermes/serve.js"
+  },
+  "engines": { "node": ">=18" }
+}

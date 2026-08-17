@@ -1,0 +1,72 @@
+{
+  "version": "20260816173226",
+  "base": "base.png",
+  "placement": {
+    "x": 269,
+    "y": 323,
+    "w": 319,
+    "h": 250
+  },
+  "baseSize": {
+    "w": 832,
+    "h": 1216
+  },
+  "sprites": [
+    {
+      "id": "closed",
+      "file": "closed.png",
+      "openness": 0,
+      "width": 0.3,
+      "roundness": 0.2
+    },
+    {
+      "id": "barely",
+      "file": "barely.png",
+      "openness": 0.15,
+      "width": 0.32,
+      "roundness": 0.22
+    },
+    {
+      "id": "slight",
+      "file": "slight.png",
+      "openness": 0.3,
+      "width": 0.35,
+      "roundness": 0.25
+    },
+    {
+      "id": "mid",
+      "file": "mid.png",
+      "openness": 0.5,
+      "width": 0.4,
+      "roundness": 0.25
+    },
+    {
+      "id": "open",
+      "file": "open.png",
+      "openness": 0.72,
+      "width": 0.45,
+      "roundness": 0.18
+    },
+    {
+      "id": "wide",
+      "file": "wide.png",
+      "openness": 0.28,
+      "width": 0.72,
+      "roundness": 0.05
+    },
+    {
+      "id": "round",
+      "file": "round.png",
+      "openness": 0.4,
+      "width": 0.1,
+      "roundness": 0.95
+    },
+    {
+      "id": "round_open",
+      "file": "round_open.png",
+      "openness": 0.7,
+      "width": 0.15,
+      "roundness": 0.8
+    }
+  ]
+}

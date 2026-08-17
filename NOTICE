@@ -1,0 +1,63 @@
+EMMA Skin
+Copyright 2026 Ryan Chen
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
+except in compliance with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+This product bundles or depends on the following third-party work.
+
+
+── Viseme model ────────────────────────────────────────────────────────────────
+
+packages/viseme uses `wav2arkit`, a single ONNX graph exported by combining two upstream
+models. It is a derivative work of both, and is redistributed under the same terms.
+
+  facebook/wav2vec2-base-960h                          Apache License 2.0
+  https://huggingface.co/facebook/wav2vec2-base-960h
+  Used as the audio encoder.
+
+  3DAIGC/LAM_audio2exp  (aigc3d/LAM_Audio2Expression)  Apache License 2.0
+  https://huggingface.co/3DAIGC/LAM_audio2exp
+  Used as the expression decoder, producing 52 ARKit blendshapes.
+
+Modification: the two models were combined and exported to a single ONNX graph for CPU
+inference. No weights were retrained or fine-tuned.
+
+The model weights are not committed to this repository; see packages/viseme/README.md for
+how to obtain them.
+
+
+── Bundled face pack (assets/emma) ─────────────────────────────────────────────
+
+The portrait and its mouth-shape library are synthetic. No real person is depicted.
+
+  Base portrait          generated with Z-Image Turbo (Tongyi-MAI / Alibaba)
+                         https://huggingface.co/Tongyi-MAI/Z-Image-Turbo
+                         Model released under Apache License 2.0.
+
+  Mouth and eye shapes   generated with Qwen-Image-Edit (Alibaba)
+                         Model released under Apache License 2.0.
+
+  Idle video clips       generated with Google Veo 3.1 via the Gemini API.
+                         Google does not claim ownership of generated output and permits
+                         commercial use and redistribution. Output may carry an invisible
+                         SynthID provenance watermark; the clips here were letterboxed-
+                         cropped and re-encoded, which was not done to affect it.
+
+Generation parameters for every asset are recorded in docs/face-packs.md so the pack can be
+rebuilt or replaced.
+
+
+── Voices ──────────────────────────────────────────────────────────────────────
+
+No voice model or voice account is bundled. The TTS adapters in packages/server/src/tts.js
+call software or services you supply:
+
+  macOS `say`, espeak-ng     local, no account
+  Fish Audio, OpenAI TTS     your own account; commercial rights and any voice-cloning
+                             consent are governed by your agreement with that provider
+
+Cloning a voice requires the consent of the person whose voice it is. This project bundles
+no cloned voice and takes no position on yours.

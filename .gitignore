@@ -1,0 +1,8 @@
+node_modules/
+venv/
+__pycache__/
+*.pyc
+
+# Model weights are ~400MB and licensed separately; see packages/viseme/README.md.
+packages/viseme/models/*.onnx
+packages/viseme/models/*.onnx.data

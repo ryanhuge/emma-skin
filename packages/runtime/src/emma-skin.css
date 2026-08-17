@@ -1,0 +1,48 @@
+/**
+ * Layer styles for EMMA Skin.
+ *
+ * The runtime toggles two classes on the stage element and nothing else: `emma-speaking`
+ * decides which layer is visible, `emma-xfade` covers the moment they swap.
+ *
+ * The two cover-fits must agree. `object-position: center 22%` here is the same bias the
+ * canvas applies when it draws the portrait; changing one without the other makes the head
+ * jump on every handover.
+ */
+
+.emma-stage {
+  position: relative;
+  overflow: hidden;
+  background: #14110E;
+}
+
+.emma-stage > .emma-face,
+.emma-stage > .emma-clip {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  transition: opacity .22s ease, filter .11s ease;
+  /* A long press on a face otherwise offers a save menu on mobile. */
+  pointer-events: none;
+}
+
+.emma-stage > .emma-clip {
+  object-fit: cover;
+  object-position: center 22%;
+}
+
+/* Video while quiet, canvas while speaking. */
+.emma-stage.emma-speaking > .emma-clip { opacity: 0; }
+.emma-stage:not(.emma-speaking) > .emma-face { opacity: 0; }
+
+/**
+ * The layers do not agree on where the head is — video models drift 13-19% in head scale
+ * across a take — so a straight dissolve shows both at once. Blurring through the swap
+ * turns that into a focus pull, which reads as intentional. 9px is where the ghost stops
+ * resolving: at the worst frame and a 50/50 mix, 6px still showed two sets of eyes.
+ */
+.emma-stage.emma-xfade > .emma-clip,
+.emma-stage.emma-xfade > .emma-face {
+  filter: blur(9px) brightness(.88);
+}

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EMMA Skin — static demo</title>
+<link rel="stylesheet" href="../../packages/runtime/src/emma-skin.css">
+<style>
+  html, body { height: 100%; margin: 0; background: #14110E; color: #F2EDE4;
+    font: 15px/1.6 -apple-system, "Noto Sans TC", system-ui, sans-serif; }
+  #stage { position: fixed; inset: 0; }
+  #ui { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    background: linear-gradient(to top, rgba(20,17,14,.92), transparent); }
+  button { font: inherit; padding: 12px 26px; border-radius: 999px; cursor: pointer;
+    background: #C9A96E; color: #14110E; border: 0; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 8px; }
+  .row button { background: transparent; color: #A79B8A; border: 1px solid #332C24;
+    font-weight: 400; padding: 8px 16px; }
+  .row button.on { color: #F2EDE4; border-color: #C9A96E; }
+  #note { font-size: 12px; color: #6E6355; text-align: center; max-width: 30em; }
+</style>
+</head>
+<body>
+<div id="stage" class="emma-stage">
+  <video id="clip" class="emma-clip" muted playsinline autoplay loop preload="auto"></video>
+  <canvas id="face" class="emma-face"></canvas>
+  <div id="ui">
+    <div class="row">
+      <button data-state="idle" class="on">idle</button>
+      <button data-state="listening">listening</button>
+      <button data-state="thinking">thinking</button>
+    </div>
+    <button id="say" disabled>Loading face pack…</button>
+    <div id="note">No agent, no server, no API key — a pre-recorded clip and its
+      pre-computed viseme curve, played through the runtime.</div>
+  </div>
+</div>
+
+<script type="module">
+import { EmmaSkin } from '../../packages/runtime/src/emma-skin.js';
+
+const face = new EmmaSkin({
+  canvas: document.getElementById('face'),
+  video: document.getElementById('clip'),
+  art: '../../assets/emma/',
+});
+
+const sayBtn = document.getElementById('say');
+
+await face.load();
+console.info(`[emma-skin] face pack ${face.version}`);
+window.face = face;   // exposed on purpose: makes the renderer pokeable from the console
+
+// Decode once up front so pressing the button starts speech immediately rather than
+// after a fetch — the demo is about the lip sync, not about loading.
+const [wav, visemes] = await Promise.all([
+  fetch('sample.wav').then((r) => r.arrayBuffer()),
+  fetch('sample.visemes.json').then((r) => r.json()),
+]);
+
+sayBtn.disabled = false;
+sayBtn.textContent = 'Speak';
+
+sayBtn.onclick = async () => {
+  await face.resume();                       // browsers need a gesture to start audio
+  const audio = await face.audioCtx.decodeAudioData(wav.slice(0));
+  face.speak({
+    pcm: audio.getChannelData(0),
+    sampleRate: audio.sampleRate,
+    visemes: visemes.mouth,
+    fps: visemes.fps,
+  });
+  sayBtn.disabled = true;
+  face.onSpeechEnd = () => { sayBtn.disabled = false; };
+};
+
+for (const b of document.querySelectorAll('[data-state]')) {
+  b.onclick = () => {
+    document.querySelectorAll('[data-state]').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    face.setState(b.dataset.state);
+  };
+}
+</script>
+</body>
+</html>

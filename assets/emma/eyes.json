@@ -1,0 +1,33 @@
+{
+  "base": "base.png",
+  "region": {
+    "cx": 0.5014,
+    "cy": 0.263,
+    "rx": 0.1111,
+    "ry": 0.0259,
+    "feather": 0.012
+  },
+  "placement": {
+    "x": 322,
+    "y": 286,
+    "w": 190,
+    "h": 68
+  },
+  "sprites": [
+    {
+      "id": "open",
+      "file": "open.png",
+      "openness": 1
+    },
+    {
+      "id": "half",
+      "file": "half.png",
+      "openness": 0.45
+    },
+    {
+      "id": "closed",
+      "file": "closed.png",
+      "openness": 0
+    }
+  ]
+}
