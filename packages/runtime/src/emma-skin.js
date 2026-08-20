@@ -84,11 +84,12 @@ export class EmmaSkin {
     this.audioCtx = null;
     this._playCursor = 0;
     this._timeline = [];
+    this._sources = new Set();
     this._blinkPhase = 1;
     this._nextBlink = 0;
     this._raf = null;
 
-    this._onResize = () => { if (this.base) this._fit(); };
+    this._resizeObserver = null;
   }
 
   // ── loading ────────────────────────────────────────────────────────────────
@@ -128,7 +129,21 @@ export class EmmaSkin {
     this.eyeSet = { place: eyeMeta.placement, sprites: eyes };
 
     this._fit();
-    addEventListener('resize', this._onResize);
+    /**
+     * Watch the canvas's own box, not the window.
+     *
+     * A window resize listener misses the case that matters most: this stylesheet arriving
+     * after the script runs. Module scripts do not wait for external CSS, so on a cold cache
+     * the first measurement can be of an unstyled canvas — the browser's default 300x150 —
+     * and the backing store is then stretched across the screen for the rest of the session.
+     * Nothing resizes the window afterwards, so nothing ever corrects it.
+     *
+     * ResizeObserver fires whenever the element's box actually changes, which covers the
+     * late stylesheet, orientation changes, and a phone's URL bar collapsing.
+     */
+    this._resizeObserver = new ResizeObserver(() => { if (this.base) this._fit(); });
+    this._resizeObserver.observe(this.canvas);
+    this._initClips();
     this.setState('idle');
     this._raf = requestAnimationFrame((t) => this._loop(t));
     return this;
@@ -137,21 +152,58 @@ export class EmmaSkin {
   destroy() {
     if (this._raf) cancelAnimationFrame(this._raf);
     clearTimeout(this._xfadeTimer);
-    removeEventListener('resize', this._onResize);
+    this._resizeObserver?.disconnect();
     this.audioCtx?.close?.();
   }
 
   // ── state ──────────────────────────────────────────────────────────────────
 
+  /**
+   * One element per clip, all loaded up front, so a state change is a swap and not a fetch.
+   *
+   * Reassigning src on a single element tears down the current playback and downloads the
+   * next clip from scratch. Measured on a phone-grade connection that froze the face for
+   * over eight seconds — and it happened at the worst possible moment, since the state
+   * changes exactly when the agent starts working and the user is already waiting.
+   *
+   * The element handed to the constructor becomes the first clip; the rest are cloned from
+   * it so they inherit whatever attributes and classes the host page set.
+   */
+  _initClips() {
+    if (!this.video) return;
+    this._clips = new Map();
+    for (const id of new Set(Object.values(this.clipFor))) {
+      let el = this.video;
+      if (this._clips.size) {
+        el = this.video.cloneNode(false);
+        el.removeAttribute('id');
+        this.video.parentElement.insertBefore(el, this.video.nextSibling);
+      }
+      el.muted = true;
+      el.loop = true;
+      el.playsInline = true;
+      el.preload = 'auto';
+      el.src = `${this.art}${this.clipDir}${id}.mp4`;
+      this._clips.set(id, el);
+    }
+  }
+
   /** 'idle' | 'listening' | 'thinking' — what she does between utterances. */
   setState(state) {
     this.state = state;
-    if (!this.video) return;
+    if (!this._clips?.size) return;
     const id = this.clipFor[state] || this.clipFor.idle;
-    if (id === this._clipId && this.video.src) return;
+    if (id === this._clipId) return;
     this._clipId = id;
-    if (!this.video.src.endsWith(`${id}.mp4`)) this.video.src = `${this.art}${this.clipDir}${id}.mp4`;
-    this.video.play().catch(() => {});
+    // One decoder at a time. The others keep their buffered data, so resuming them is a
+    // local seek rather than a download — phones will happily evict or starve a second
+    // background <video>, and two decoding at once is battery spent on nothing visible.
+    for (const [key, el] of this._clips) {
+      el.classList.toggle('emma-active', key === id);
+      if (key === id) el.play().catch(() => {});
+      else el.pause();
+    }
+    this.video = this._clips.get(id);
   }
 
   /**
@@ -176,8 +228,9 @@ export class EmmaSkin {
     stage.classList.add('emma-xfade');
     clearTimeout(this._xfadeTimer);
     if (!on) {
-      try { this.video.currentTime = 0; } catch { /* seeking is best-effort */ }
-      this.video.play().catch(() => {});
+      const active = this._clips?.get(this._clipId) ?? this.video;
+      try { active.currentTime = 0; } catch { /* seeking is best-effort */ }
+      active.play().catch(() => {});
     }
     setTimeout(() => stage.classList.toggle('emma-speaking', on), XFADE_LEAD_MS);
     this._xfadeTimer = setTimeout(() => stage.classList.remove('emma-xfade'),
@@ -190,8 +243,19 @@ export class EmmaSkin {
     return (this.audioCtx ||= new (window.AudioContext || window.webkitAudioContext)());
   }
 
-  /** Browsers start the audio context suspended; call this from a user gesture. */
-  async resume() { await this._ac.resume(); }
+  /**
+   * Browsers start the audio context suspended; call this from a user gesture.
+   *
+   * Returns the context, because callers need one too — a voice UI typically wants to run
+   * its own microphone analyser on it. Reading `.audioCtx` directly works only after
+   * something has already created it, which makes for a null dereference on whichever path
+   * happens to run first.
+   */
+  async resume() {
+    const ac = this._ac;
+    await ac.resume();
+    return ac;
+  }
 
   /**
    * Queue one utterance. Call repeatedly as sentences arrive — they butt against each other
@@ -206,6 +270,9 @@ export class EmmaSkin {
    */
   speak({ pcm, sampleRate, visemes = null, fps = 30 }) {
     const ac = this._ac;
+    // A suspended context accepts the schedule and plays nothing. Resuming may need a
+    // gesture and can fail, but trying costs nothing and rescues the backgrounded case.
+    if (ac.state !== 'running') ac.resume().catch(() => {});
     const samples = typeof pcm === 'string' ? decodeBase64Pcm(pcm) : pcm;
     const buf = ac.createBuffer(1, samples.length, sampleRate);
     const ch = buf.getChannelData(0);
@@ -218,6 +285,11 @@ export class EmmaSkin {
     const src = ac.createBufferSource();
     src.buffer = buf;
     src.connect(ac.destination);
+    // Held so stop() can silence it. A BufferSource keeps playing after every reference to
+    // it is dropped — clearing the queue without these handles left the old reply talking
+    // underneath the new one whenever a turn was interrupted.
+    this._sources.add(src);
+    src.onended = () => this._sources.delete(src);
     src.start(start);
     this._playCursor = start + buf.duration;
 
@@ -234,8 +306,12 @@ export class EmmaSkin {
     return remaining;
   }
 
-  /** Drop anything queued and fall silent. */
+  /** Drop anything queued and fall silent — including audio already scheduled. */
   stop() {
+    for (const src of this._sources) {
+      try { src.stop(0); src.disconnect(); } catch { /* already ended */ }
+    }
+    this._sources.clear();
     this._timeline.length = 0;
     this._playCursor = 0;
     clearTimeout(this._endTimer);
